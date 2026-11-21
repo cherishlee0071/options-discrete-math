@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>美式看跌期权的行权时间</title>
+  <style>
+    :root { --ink:#142d30; --muted:#52676a; --line:#d5e1dd; --paper:#f4f7f4;
+            --teal:#077367; --pale:#e5f4ed; --amber:#a4491b; --amber-bg:#fff0e5;
+            --blue:#2758a1; --blue-bg:#e9f0ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink);
+           font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; line-height:1.55; }
+    button, select, input { font:inherit; }
+    button,select { color:var(--ink); }
+    button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible {
+      outline:2px solid var(--blue); outline-offset:3px; }
+    a { color:var(--teal); }
+    main { max-width:1400px; margin:auto; padding:36px clamp(14px,4vw,55px) 24px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:clamp(27px,4vw,43px); letter-spacing:-.045em; line-height:1.2; }
+    h2 { font-size:20px; }
+    h3 { font-size:16px; }
+    .intro { display:flex; align-items:end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .intro p { margin-top:8px; color:var(--muted); }
+    select { display:block; padding:8px 30px 8px 10px; background:white; border:1px solid #9db8ae; border-radius:6px; }
+    .control-label { font-size:13px; color:var(--muted); display:block; margin-bottom:4px; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:24px 0 13px; }
+    .metric { border:1px solid var(--line); border-radius:8px; background:white; padding:12px 14px; }
+    .metric span { display:block; color:var(--muted); font-size:13px; }
+    .metric strong { display:block; margin-top:2px; font-size:clamp(21px,3vw,30px); font-variant-numeric:tabular-nums; }
+    .panel { background:white; border:1px solid var(--line); border-radius:11px; margin-bottom:12px; padding:16px; }
+    .subtle { color:var(--muted); font-size:13px; }
+    .panel-heading { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+    .distribution { height:172px; display:flex; align-items:stretch; gap:4px; margin-top:10px; }
+    .bar-cell { min-width:0; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:end;
+                gap:4px; padding:4px 1px 3px; border:0; border-radius:4px; background:transparent; cursor:pointer;
+                font-variant-numeric:tabular-nums; }
+    .bar-cell:hover,.bar-cell[aria-pressed="true"] { background:#eef5f1; }
+    .bar-track { flex:1; display:flex; align-items:end; justify-content:center; width:100%; border-bottom:1px solid #c4d5cf; }
+    .bar { position:relative; width:55%; max-width:43px; border-radius:4px 4px 0 0; background:var(--amber); }
+    .bar-cell.maturity .bar { background:var(--blue); }
+    .bar-value { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; }
+    .bar-step { color:var(--muted); font-size:12px; }
+    .navigation { display:flex; align-items:center; gap:9px; margin:12px 0; }
+    .navigation button { border:1px solid #9db8ae; padding:4px 10px; background:white; border-radius:5px; cursor:pointer; }
+    .navigation button:disabled { opacity:.42; cursor:default; }
+    input[type="range"] { accent-color:var(--teal); flex:1; min-width:40px; }
+    #step-label { min-width:54px; font-variant-numeric:tabular-nums; text-align:right; }
+    .tree-layout { display:grid; grid-template-columns:minmax(0,1fr) 215px; gap:14px; align-items:start; }
+    .tree-scroll { overflow:auto; border:1px solid var(--line); border-radius:7px; background:#f8faf8; }
+    .graph { position:relative; }
+    #edges,.nodes { position:absolute; inset:0; }
+    .tree-node { position:absolute; transform:translate(-50%,-50%); width:46px; height:25px;
+                 border-radius:5px; border:1px solid #8ab9a9; background:var(--pale); color:var(--ink);
+                 text-align:center; padding:0; font-size:11px; font-variant-numeric:tabular-nums; cursor:pointer; }
+    .tree-node.exercise { background:var(--amber-bg); color:#783711; border-color:#d19a7b; }
+    .tree-node.maturity { background:var(--blue-bg); color:#214a88; border-color:#a0b4dc; }
+    .tree-node.expire { background:#ecf0ef; color:#526060; border-color:#bac5c0; }
+    .tree-node.dimmed { opacity:.52; }
+    .tree-node[aria-pressed="true"] { outline:2px solid var(--ink); outline-offset:2px; }
+    .tree-step { position:absolute; transform:translateX(-50%); top:7px; color:var(--muted); font-size:11px; white-space:nowrap; }
+    .legend { display:flex; flex-wrap:wrap; gap:5px 12px; margin:0 0 9px; }
+    .key { display:inline-flex; align-items:center; gap:4px; }
+    .swatch { width:11px; height:11px; border-radius:3px; border:1px solid #798e86; background:var(--pale); }
+    .swatch.exercise { background:var(--amber-bg); }.swatch.maturity { background:var(--blue-bg); }
+    .swatch.expire { background:#ecf0ef; }
+    .details { background:#f6f9f6; border:1px solid var(--line); border-radius:7px; padding:11px; }
+    .details h3 { margin-bottom:6px; }
+    dl { margin:0; font-size:13px; }
+    dl div { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:4px 0; }
+    dl div + div { border-top:1px solid #e2ebe7; }
+    dt { color:var(--muted); }
+    dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    #unreachable { margin-top:7px; }
+    footer { margin:14px 0 0; font-size:13px; color:var(--muted); }
+    footer p + p { margin-top:5px; }
+    @media(max-width:800px) { .tree-layout{grid-template-columns:1fr;} .details {max-width:460px;} }
+    @media(max-width:540px) { .metrics{grid-template-columns:repeat(2,1fr);} .panel{padding:10px;}
+      .bar-value{font-size:10px;} .distribution{gap:0;} }
+  </style>
+</head>
+<body>
+<main>
+  <header class="intro">
+    <div>
+      <h1>美式看跌期权的行权时间</h1>
+      <p>先倒推每个节点的行权决策，再从根节点向前传递尚未行权的概率。</p>
+    </div>
+    <label><span class="control-label">演示情景</span>
+      <select id="scenario"><option value="brkb">BRK.B · 12 步价格树</option><option value="hand">手算例 · 3 步价格树</option></select>
+    </label>
+  </header>
+  <section class="metrics" aria-label="模型结果">
+    <div class="metric"><span>模型价格（每股）</span><strong id="price"></strong></div>
+    <div class="metric"><span>提前行权</span><strong id="early"></strong></div>
+    <div class="metric"><span>到期行权</span><strong id="maturity"></strong></div>
+    <div class="metric"><span>到期无价值</span><strong id="expired"></strong></div>
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><h2>在哪一步行权</h2><p class="subtle">风险中性概率 · 点击柱或步数可定位到价格树</p></div>
+    <div class="distribution" id="distribution" aria-label="逐步行权概率"></div>
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><h2>价格树与节点决策</h2><p class="subtle" id="parameters"></p></div>
+    <div class="navigation">
+      <button type="button" id="prev">上一步</button>
+      <button type="button" id="next">下一步</button>
+      <input type="range" id="step" aria-label="价格树步数" min="0" value="0">
+      <output id="step-label" for="step"></output>
+    </div>
+    <div class="legend subtle" aria-label="节点图例">
+      <span class="key"><i class="swatch"></i>继续持有</span>
+      <span class="key"><i class="swatch exercise"></i>提前行权</span>
+      <span class="key"><i class="swatch maturity"></i>到期行权</span>
+      <span class="key"><i class="swatch expire"></i>到期无价值</span>
+      <span>粗边表示仍有概率流过</span>
+    </div>
+    <div class="tree-layout">
+      <div class="tree-scroll" id="tree-scroll" aria-label="可横向滚动的价格树">
+        <div class="graph" id="graph"><canvas id="edges" aria-hidden="true"></canvas><div class="nodes" id="nodes"></div></div>
+      </div>
+      <aside class="details" aria-live="polite">
+        <h3 id="node-title"></h3>
+        <dl id="node-values"></dl>
+        <p class="subtle" id="unreachable" hidden>该节点在股价树上存在，但到达它的路径都已提前行权。</p>
+        <dl id="step-values"></dl>
+      </aside>
+    </div>
+  </section>
+  <footer>
+    <p id="data-note"></p>
+    <p id="checks"></p>
+    <p>图中概率由定价模型和行权规则计算。<span id="sources"></span></p>
+  </footer>
+  <noscript>请启用 JavaScript 查看交互演示。</noscript>
+</main>
+<script type="application/json" id="demo-data">__DEMO_DATA__</script>
+<script>
+  const data = JSON.parse(document.getElementById('demo-data').textContent);
+  const el = id => document.getElementById(id);
+  const usd = x => '$' + x.toFixed(2);
+  const pct = x => (100 * x).toFixed(2) + '%';
+  const labels = { continue:'继续持有', exercise:'提前行权', maturity:'到期行权', expire:'到期无价值' };
+  const state = { key:'brkb', step:0, ups:0 };
+  let nodeButtons = [], barButtons = [], geometry;
+  const model = () => data.models[state.key];
+
+  function selectStep(step, ups) {
+    state.step = step;
+    const layer = model().layers[step];
+    state.ups = ups ?? layer.reduce((best, node, index) => node.reach > layer[best].reach ? index : best, 0);
+    renderSelection();
+    keepStepInView();
+  }
+
+  function renderChart() {
+    const chart = el('distribution');
+    chart.replaceChildren();
+    const rows = model().distribution;
+    const max = Math.max(...rows.map(row => row.early + row.maturity), 0.01);
+    barButtons = rows.map(row => {
+      const fraction = row.early + row.maturity;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bar-cell' + (row.maturity ? ' maturity' : '');
+      button.setAttribute('aria-label', `第 ${row.step} 步，行权 ${pct(fraction)}`);
+      button.title = `第 ${row.step} 步 · 行权 ${pct(fraction)}`;
+      const track = document.createElement('span');
+      track.className = 'bar-track';
+      if (fraction > 0) {
+        const bar = document.createElement('span');
+        bar.className = 'bar';
+        bar.style.height = `${fraction / max * 76}%`;
+        const value = document.createElement('span');
+        value.className = 'bar-value';
+        value.textContent = pct(fraction);
+        bar.append(value);
+        track.append(bar);
+      }
+      const index = document.createElement('span');
+      index.className = 'bar-step';
+      index.textContent = row.step;
+      button.append(track, index);
+      button.addEventListener('click', () => selectStep(row.step));
+      chart.append(button);
+      return button;
+    });
+  }
+
+  function renderTree() {
+    const tree = el('nodes');
+    tree.replaceChildren();
+    const steps = model().steps;
+    const width = Math.max(el('tree-scroll').clientWidth - 2, 64 * steps + 64);
+    const spacing = steps === 3 ? 64 : 32;
+    const height = steps * spacing + 68;
+    const point = (step, ups) => [32 + (width - 64) * step / steps, (height + 25) / 2 + (step / 2 - ups) * spacing];
+    geometry = { width, height, point };
+    el('graph').style.width = `${width}px`;
+    el('graph').style.height = `${height}px`;
+    nodeButtons = model().layers.map((layer, step) => {
+      const column = document.createElement('span');
+      column.className = 'tree-step';
+      column.textContent = `第 ${step} 步`;
+      column.style.left = `${point(step, 0)[0]}px`;
+      tree.append(column);
+      return layer.map((node, ups) => {
+        const [x, y] = point(step, ups);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `tree-node ${node.action}`;
+        button.textContent = node.stock.toFixed(1);
+        button.setAttribute('aria-label', `第 ${step} 步，上涨 ${ups} 次，股价 ${node.stock.toFixed(2)}，${labels[node.action]}`);
+        button.title = button.getAttribute('aria-label');
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        button.addEventListener('click', () => selectStep(step, ups));
+        tree.append(button);
+        return button;
+      });
+    });
+  }
+
+  function drawEdges() {
+    const {width, height, point} = geometry;
+    const canvas = el('edges');
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext('2d');
+    context.scale(scale, scale);
+    const {layers, steps, p} = model();
+    for (let step = 0; step < steps; step++) {
+      layers[step].forEach((node, ups) => {
+        for (const branch of [0, 1]) {
+          const flow = node.action === 'continue' ? node.reach * (branch ? p : 1 - p) : 0;
+          const visibleFlow = flow > 0 && step < state.step;
+          context.strokeStyle = visibleFlow ? '#208671' : '#d5dfda';
+          context.lineWidth = visibleFlow ? 1.3 + Math.sqrt(flow) * 6 : 1;
+          context.beginPath();
+          context.moveTo(...point(step, ups));
+          context.lineTo(...point(step + 1, ups + branch));
+          context.stroke();
+        }
+      });
+    }
+  }
+
+  function setValues(id, entries) {
+    const list = el(id);
+    list.replaceChildren();
+    for (const [name, value] of entries) {
+      const row = document.createElement('div');
+      const term = document.createElement('dt');
+      const definition = document.createElement('dd');
+      term.textContent = name;
+      definition.textContent = value;
+      row.append(term, definition);
+      list.append(row);
+    }
+  }
+
+  function renderSelection() {
+    const {step, ups} = state;
+    el('step').value = step;
+    el('step-label').value = `${step} / ${model().steps}`;
+    el('prev').disabled = step === 0;
+    el('next').disabled = step === model().steps;
+    barButtons.forEach((button, index) => button.setAttribute('aria-pressed', index === step));
+    nodeButtons.forEach((layer, i) => layer.forEach((button, j) => {
+      button.setAttribute('aria-pressed', i === step && j === ups);
+      button.classList.toggle('dimmed', i > step || model().layers[i][j].reach === 0);
+    }));
+    drawEdges();
+    const node = model().layers[step][ups];
+    const agg = model().distribution[step];
+    el('node-title').textContent = `第 ${step} 步 · 上涨 ${ups} 次`;
+    setValues('node-values', [['节点股价', usd(node.stock)], ['立即行权收益', usd(node.payoff)],
+      ['继续持有价值', node.continuation === null ? '—' : usd(node.continuation)],
+      ['节点价值', usd(node.value)], ['最优动作', labels[node.action]], ['节点到达概率', pct(node.reach)]]);
+    el('unreachable').hidden = node.reach > 0;
+    setValues('step-values', [['本步到达', pct(agg.reach)], ['本步行权', pct(agg.early + agg.maturity)],
+      ['本步无价值到期', pct(agg.expired)], ['传往下一步', pct(agg.remaining)]]);
+  }
+
+  function keepStepInView() {
+    const viewport = el('tree-scroll');
+    const left = geometry.point(state.step, state.ups)[0];
+    if (left < viewport.scrollLeft + 25 || left > viewport.scrollLeft + viewport.clientWidth - 25) {
+      viewport.scrollLeft = left - viewport.clientWidth / 2;
+    }
+  }
+
+  function renderScenario() {
+    const current = model();
+    el('price').textContent = usd(current.price);
+    for (const key of ['early', 'maturity', 'expired']) el(key).textContent = pct(current.checks[key]);
+    el('step').max = current.steps;
+    el('parameters').textContent = `标的 ${usd(current.spot)} · 行权价 ${usd(current.strike)} · 上涨概率 ${pct(current.p)}`;
+    el('data-note').textContent = state.key === 'brkb'
+      ? `${data.valuation_date} BRK.B 收盘价。${data.window_start} 至估值日的 60 个日收益估计年化波动率 ${pct(data.volatility)}。示例合约剩余 ${data.term_days} 天，利率 ${pct(data.rate)}，假设无股息。`
+      : '手算例每步上涨乘 1.25，下跌乘 0.80，无风险增长倍数为 1.025。';
+    el('checks').textContent = `核验通过。${current.checks.path_count.toLocaleString()} 条路径穷举与逐步概率一致，概率合计 100%，折现行权收益合计 ${usd(current.checks.forward_price)}。`;
+    el('tree-scroll').scrollLeft = 0;
+    renderChart();
+    renderTree();
+    renderSelection();
+  }
+
+  el('scenario').addEventListener('change', event => {
+    state.key = event.target.value;
+    state.step = 0;
+    state.ups = 0;
+    renderScenario();
+  });
+  el('step').addEventListener('input', event => selectStep(Number(event.target.value)));
+  el('prev').addEventListener('click', () => selectStep(state.step - 1));
+  el('next').addEventListener('click', () => selectStep(state.step + 1));
+  window.addEventListener('resize', () => { renderTree(); renderSelection(); keepStepInView(); });
+  for (const [name, link] of [['美国财政部利率表', data.sources.treasury], ['CRR 原文', data.sources.crr]]) {
+    const anchor = document.createElement('a');
+    anchor.href = link;
+    anchor.textContent = name;
+    el('sources').append(' ', anchor);
+  }
+  renderScenario();
+</script>
+</body>
+</html>

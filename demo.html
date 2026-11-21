@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>美式看跌期权的行权时间</title>
+  <style>
+    :root { --ink:#142d30; --muted:#52676a; --line:#d5e1dd; --paper:#f4f7f4;
+            --teal:#077367; --pale:#e5f4ed; --amber:#a4491b; --amber-bg:#fff0e5;
+            --blue:#2758a1; --blue-bg:#e9f0ff; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink);
+           font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif; line-height:1.55; }
+    button, select, input { font:inherit; }
+    button,select { color:var(--ink); }
+    button:focus-visible, select:focus-visible, a:focus-visible, input:focus-visible {
+      outline:2px solid var(--blue); outline-offset:3px; }
+    a { color:var(--teal); }
+    main { max-width:1400px; margin:auto; padding:36px clamp(14px,4vw,55px) 24px; }
+    h1,h2,h3,p { margin:0; }
+    h1 { font-size:clamp(27px,4vw,43px); letter-spacing:-.045em; line-height:1.2; }
+    h2 { font-size:20px; }
+    h3 { font-size:16px; }
+    .intro { display:flex; align-items:end; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .intro p { margin-top:8px; color:var(--muted); }
+    select { display:block; padding:8px 30px 8px 10px; background:white; border:1px solid #9db8ae; border-radius:6px; }
+    .control-label { font-size:13px; color:var(--muted); display:block; margin-bottom:4px; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:24px 0 13px; }
+    .metric { border:1px solid var(--line); border-radius:8px; background:white; padding:12px 14px; }
+    .metric span { display:block; color:var(--muted); font-size:13px; }
+    .metric strong { display:block; margin-top:2px; font-size:clamp(21px,3vw,30px); font-variant-numeric:tabular-nums; }
+    .panel { background:white; border:1px solid var(--line); border-radius:11px; margin-bottom:12px; padding:16px; }
+    .subtle { color:var(--muted); font-size:13px; }
+    .panel-heading { display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+    .distribution { height:172px; display:flex; align-items:stretch; gap:4px; margin-top:10px; }
+    .bar-cell { min-width:0; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:end;
+                gap:4px; padding:4px 1px 3px; border:0; border-radius:4px; background:transparent; cursor:pointer;
+                font-variant-numeric:tabular-nums; }
+    .bar-cell:hover,.bar-cell[aria-pressed="true"] { background:#eef5f1; }
+    .bar-track { flex:1; display:flex; align-items:end; justify-content:center; width:100%; border-bottom:1px solid #c4d5cf; }
+    .bar { position:relative; width:55%; max-width:43px; border-radius:4px 4px 0 0; background:var(--amber); }
+    .bar-cell.maturity .bar { background:var(--blue); }
+    .bar-value { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); color:var(--ink); font-size:12px; }
+    .bar-step { color:var(--muted); font-size:12px; }
+    .navigation { display:flex; align-items:center; gap:9px; margin:12px 0; }
+    .navigation button { border:1px solid #9db8ae; padding:4px 10px; background:white; border-radius:5px; cursor:pointer; }
+    .navigation button:disabled { opacity:.42; cursor:default; }
+    input[type="range"] { accent-color:var(--teal); flex:1; min-width:40px; }
+    #step-label { min-width:54px; font-variant-numeric:tabular-nums; text-align:right; }
+    .tree-layout { display:grid; grid-template-columns:minmax(0,1fr) 215px; gap:14px; align-items:start; }
+    .tree-scroll { overflow:auto; border:1px solid var(--line); border-radius:7px; background:#f8faf8; }
+    .graph { position:relative; }
+    #edges,.nodes { position:absolute; inset:0; }
+    .tree-node { position:absolute; transform:translate(-50%,-50%); width:46px; height:25px;
+                 border-radius:5px; border:1px solid #8ab9a9; background:var(--pale); color:var(--ink);
+                 text-align:center; padding:0; font-size:11px; font-variant-numeric:tabular-nums; cursor:pointer; }
+    .tree-node.exercise { background:var(--amber-bg); color:#783711; border-color:#d19a7b; }
+    .tree-node.maturity { background:var(--blue-bg); color:#214a88; border-color:#a0b4dc; }
+    .tree-node.expire { background:#ecf0ef; color:#526060; border-color:#bac5c0; }
+    .tree-node.dimmed { opacity:.52; }
+    .tree-node[aria-pressed="true"] { outline:2px solid var(--ink); outline-offset:2px; }
+    .tree-step { position:absolute; transform:translateX(-50%); top:7px; color:var(--muted); font-size:11px; white-space:nowrap; }
+    .legend { display:flex; flex-wrap:wrap; gap:5px 12px; margin:0 0 9px; }
+    .key { display:inline-flex; align-items:center; gap:4px; }
+    .swatch { width:11px; height:11px; border-radius:3px; border:1px solid #798e86; background:var(--pale); }
+    .swatch.exercise { background:var(--amber-bg); }.swatch.maturity { background:var(--blue-bg); }
+    .swatch.expire { background:#ecf0ef; }
+    .details { background:#f6f9f6; border:1px solid var(--line); border-radius:7px; padding:11px; }
+    .details h3 { margin-bottom:6px; }
+    dl { margin:0; font-size:13px; }
+    dl div { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:4px 0; }
+    dl div + div { border-top:1px solid #e2ebe7; }
+    dt { color:var(--muted); }
+    dd { margin:0; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+    #unreachable { margin-top:7px; }
+    footer { margin:14px 0 0; font-size:13px; color:var(--muted); }
+    footer p + p { margin-top:5px; }
+    @media(max-width:800px) { .tree-layout{grid-template-columns:1fr;} .details {max-width:460px;} }
+    @media(max-width:540px) { .metrics{grid-template-columns:repeat(2,1fr);} .panel{padding:10px;}
+      .bar-value{font-size:10px;} .distribution{gap:0;} }
+  </style>
+</head>
+<body>
+<main>
+  <header class="intro">
+    <div>
+      <h1>美式看跌期权的行权时间</h1>
+      <p>先倒推每个节点的行权决策，再从根节点向前传递尚未行权的概率。</p>
+    </div>
+    <label><span class="control-label">演示情景</span>
+      <select id="scenario"><option value="brkb">BRK.B · 12 步价格树</option><option value="hand">手算例 · 3 步价格树</option></select>
+    </label>
+  </header>
+  <section class="metrics" aria-label="模型结果">
+    <div class="metric"><span>模型价格（每股）</span><strong id="price"></strong></div>
+    <div class="metric"><span>提前行权</span><strong id="early"></strong></div>
+    <div class="metric"><span>到期行权</span><strong id="maturity"></strong></div>
+    <div class="metric"><span>到期无价值</span><strong id="expired"></strong></div>
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><h2>在哪一步行权</h2><p class="subtle">风险中性概率 · 点击柱或步数可定位到价格树</p></div>
+    <div class="distribution" id="distribution" aria-label="逐步行权概率"></div>
+  </section>
+  <section class="panel">
+    <div class="panel-heading"><h2>价格树与节点决策</h2><p class="subtle" id="parameters"></p></div>
+    <div class="navigation">
+      <button type="button" id="prev">上一步</button>
+      <button type="button" id="next">下一步</button>
+      <input type="range" id="step" aria-label="价格树步数" min="0" value="0">
+      <output id="step-label" for="step"></output>
+    </div>
+    <div class="legend subtle" aria-label="节点图例">
+      <span class="key"><i class="swatch"></i>继续持有</span>
+      <span class="key"><i class="swatch exercise"></i>提前行权</span>
+      <span class="key"><i class="swatch maturity"></i>到期行权</span>
+      <span class="key"><i class="swatch expire"></i>到期无价值</span>
+      <span>粗边表示仍有概率流过</span>
+    </div>
+    <div class="tree-layout">
+      <div class="tree-scroll" id="tree-scroll" aria-label="可横向滚动的价格树">
+        <div class="graph" id="graph"><canvas id="edges" aria-hidden="true"></canvas><div class="nodes" id="nodes"></div></div>
+      </div>
+      <aside class="details" aria-live="polite">
+        <h3 id="node-title"></h3>
+        <dl id="node-values"></dl>
+        <p class="subtle" id="unreachable" hidden>该节点在股价树上存在，但到达它的路径都已提前行权。</p>
+        <dl id="step-values"></dl>
+      </aside>
+    </div>
+  </section>
+  <footer>
+    <p id="data-note"></p>
+    <p id="checks"></p>
+    <p>图中概率由定价模型和行权规则计算。<span id="sources"></span></p>
+  </footer>
+  <noscript>请启用 JavaScript 查看交互演示。</noscript>
+</main>
+<script type="application/json" id="demo-data">{"valuation_date": "2026-10-22", "window_start": "2026-07-29", "volatility": 0.1290778854435438, "rate": 0.042199999999999994, "term_days": 90, "sources": {"treasury": "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/TextView?type=daily_treasury_yield_curve&field_tdr_date_value_month=202610", "crr": "https://bpb-us-w2.wpmucdn.com/u.osu.edu/dist/7/36891/files/2017/07/CRR79-1yy8av8.pdf"}, "models": {"brkb": {"spot": 546.97, "strike": 550, "steps": 12, "up": 1.018674976138273, "down": 0.9816673850092318, "gross": 1.0008674993477582, "p": 0.5188155660166546, "price": 13.3327717602913, "layers": [[{"stock": 546.97, "payoff": 3.0299999999999727, "reach": 1.0, "continuation": 13.3327717602913, "value": 13.3327717602913, "action": "continue"}], [{"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.4811844339833454, "continuation": 18.481814768549135, "value": 18.481814768549135, "action": "continue"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.5188155660166546, "continuation": 8.579496538399784, "value": 8.579496538399784, "action": "continue"}], [{"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.23153845950787252, "continuation": 24.98047392533119, "value": 24.98047392533119, "action": "continue"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.4992919489509458, "continuation": 12.485424394922825, "value": 12.485424394922825, "action": "continue"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.26916959154118164, "continuation": 4.97122203819026, "value": 4.97122203819026, "action": "continue"}], [{"stock": 517.4359435461495, "payoff": 32.564056453850526, "reach": 0.11141270258367139, "continuation": 32.86687661175431, "value": 32.86687661175431, "action": "continue"}, {"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.3603772707726034, "continuation": 17.707863165088106, "value": 17.707863165088106, "action": "continue"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.38856065265381534, "continuation": 7.662660179642405, "value": 7.662660179642405, "action": "continue"}, {"stock": 578.1897926333695, "payoff": 0, "reach": 0.13964937398990987, "continuation": 2.483313634187766, "value": 2.483313634187766, "action": "continue"}], [{"stock": 507.949989610733, "payoff": 42.050010389267015, "reach": 0.05361005823127873, "continuation": 41.5853315212973, "value": 42.050010389267015, "action": "exercise"}, {"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.23121057740957063, "continuation": 24.404776932267595, "value": 24.404776932267595, "action": "continue"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.37393867543085085, "continuation": 11.526304031516005, "value": 11.526304031516005, "action": "continue"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.2687884199178532, "continuation": 4.092069687356304, "value": 4.092069687356304, "action": "continue"}, {"stock": 588.9874732141906, "payoff": 0, "reach": 0.07245226901044657, "continuation": 0.9953974102584595, "value": 0.9953974102584595, "action": "continue"}], [{"stock": 498.63793801663473, "payoff": 51.362061983365265, "reach": 0.0, "continuation": 50.88535088866199, "value": 51.362061983365265, "action": "exercise"}, {"stock": 517.4359435461495, "payoff": 32.564056453850526, "reach": 0.11125493082178671, "continuation": 32.58726829534349, "value": 32.58726829534349, "action": "continue"}, {"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.2998891164694598, "continuation": 16.856591018896882, "value": 16.856591018896882, "action": "continue"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.3233420092486249, "continuation": 6.601910406671984, "value": 6.601910406671984, "action": "continue"}, {"stock": 578.1897926333695, "payoff": 0, "reach": 0.17431452027300404, "continuation": 1.7711169307290067, "value": 1.7711169307290067, "action": "continue"}, {"stock": 599.9868002222074, "payoff": 0, "reach": 0.037589364955845764, "continuation": 0.27760735888722055, "value": 0.27760735888722055, "action": "continue"}], [{"stock": 489.49660067918524, "payoff": 60.503399320814765, "reach": 0.0, "continuation": 60.02668822611148, "value": 60.503399320814765, "action": "exercise"}, {"stock": 507.949989610733, "payoff": 42.050010389267015, "reach": 0.05353414091533769, "continuation": 41.57329929456368, "value": 42.050010389267015, "action": "exercise"}, {"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.2020227646725716, "continuation": 23.865373539667875, "value": 23.865373539667875, "action": "continue"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.3111742834066744, "continuation": 10.384360445253217, "value": 10.384360445253217, "action": "continue"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.2516323013179315, "continuation": 3.1048508603610605, "value": 3.1048508603610605, "action": "continue"}, {"stock": 588.9874732141906, "payoff": 0, "reach": 0.10852450380043224, "continuation": 0.5370838654766432, "value": 0.5370838654766432, "action": "continue"}, {"stock": 611.1915393996359, "payoff": 0, "reach": 0.01950194765577372, "continuation": 0.03741558378454512, "value": 0.03741558378454512, "action": "continue"}], [{"stock": 480.5228479596439, "payoff": 69.47715204035609, "reach": 0.0, "continuation": 69.00044094565283, "value": 69.47715204035609, "action": "exercise"}, {"stock": 498.63793801663473, "payoff": 51.362061983365265, "reach": 0.0, "continuation": 50.88535088866199, "value": 51.362061983365265, "action": "exercise"}, {"stock": 517.4359435461495, "payoff": 32.564056453850526, "reach": 0.09721020967072196, "continuation": 32.26966088826338, "value": 32.564056453850526, "action": "exercise"}, {"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.2545447764330634, "continuation": 15.837534956374077, "value": 15.837534956374077, "action": "continue"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.28252360845705615, "continuation": 5.344083252511836, "value": 5.344083252511836, "action": "continue"}, {"stock": 578.1897926333695, "payoff": 0, "reach": 0.18277105677087044, "continuation": 1.0332277528857317, "value": 1.0332277528857317, "action": "continue"}, {"stock": 599.9868002222074, "payoff": 0, "reach": 0.06568823551021413, "continuation": 0.07782471571050517, "value": 0.07782471571050517, "action": "continue"}, {"stock": 622.6055268138384, "payoff": 0, "reach": 0.010117914011457412, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 471.71360759373226, "payoff": 78.28639240626774, "reach": 0.0, "continuation": 77.80968131156442, "value": 78.28639240626774, "action": "exercise"}, {"stock": 489.49660067918524, "payoff": 60.503399320814765, "reach": 0.0, "continuation": 60.02668822611148, "value": 60.503399320814765, "action": "exercise"}, {"stock": 507.949989610733, "payoff": 42.050010389267015, "reach": 0.0, "continuation": 41.57329929456368, "value": 42.050010389267015, "action": "exercise"}, {"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.12248298417136082, "continuation": 23.252664607784375, "value": 23.252664607784375, "action": "continue"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.2680077548840435, "continuation": 8.986726796797507, "value": 8.986726796797507, "action": "continue"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.23452423333554445, "continuation": 1.9745864643831785, "value": 1.9745864643831785, "action": "continue"}, {"stock": 588.9874732141906, "payoff": 0, "reach": 0.1264326256933883, "continuation": 0.16187603567267406, "value": 0.16187603567267406, "action": "continue"}, {"stock": 611.1915393996359, "payoff": 0, "reach": 0.03894866181356235, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 634.2326701706437, "payoff": 0, "reach": 0.005249331284762117, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 463.06586363981006, "payoff": 86.93413636018994, "reach": 0.0, "continuation": 86.45742526548665, "value": 86.93413636018994, "action": "exercise"}, {"stock": 480.5228479596439, "payoff": 69.47715204035609, "reach": 0.0, "continuation": 69.00044094565283, "value": 69.47715204035609, "action": "exercise"}, {"stock": 498.63793801663473, "payoff": 51.362061983365265, "reach": 0.0, "continuation": 50.88535088866199, "value": 51.362061983365265, "action": "exercise"}, {"stock": 517.4359435461495, "payoff": 32.564056453850526, "reach": 0.058936905411087315, "continuation": 32.0873453591473, "value": 32.564056453850526, "action": "exercise"}, {"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.19250723859729912, "continuation": 14.655534074653065, "value": 14.655534074653065, "action": "continue"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.25189600551995983, "continuation": 3.744120329524358, "value": 3.744120329524358, "action": "continue"}, {"stock": 578.1897926333695, "payoff": 0, "reach": 0.1825122342939037, "continuation": 0.3367034583534459, "value": 0.3367034583534459, "action": "continue"}, {"stock": 599.9868002222074, "payoff": 0, "reach": 0.08433670405125483, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 622.6055268138384, "payoff": 0, "reach": 0.022733068527443938, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 646.0769501521935, "payoff": 0, "reach": 0.0027234347817127903, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 454.57665544633386, "payoff": 95.42334455366614, "reach": 0.0, "continuation": 94.94663345896285, "value": 95.42334455366614, "action": "exercise"}, {"stock": 471.71360759373226, "payoff": 78.28639240626774, "reach": 0.0, "continuation": 77.80968131156442, "value": 78.28639240626774, "action": "exercise"}, {"stock": 489.49660067918524, "payoff": 60.503399320814765, "reach": 0.0, "continuation": 60.02668822611148, "value": 60.503399320814765, "action": "exercise"}, {"stock": 507.949989610733, "payoff": 42.050010389267015, "reach": 0.0, "continuation": 41.57329929456368, "value": 42.050010389267015, "action": "exercise"}, {"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.0926314866421382, "continuation": 22.424241460338173, "value": 22.9009525550415, "action": "exercise"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.22108418879394845, "continuation": 7.032683841852302, "value": 7.032683841852302, "action": "continue"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.2185096148349201, "continuation": 0.7003459060265849, "value": 0.7003459060265849, "action": "continue"}, {"stock": 588.9874732141906, "payoff": 0, "reach": 0.1352716973430799, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 611.1915393996359, "payoff": 0, "reach": 0.05469399356041357, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 634.2326701706437, "payoff": 0, "reach": 0.013104744239290247, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 658.1424217797738, "payoff": 0, "reach": 0.0014129603577837653, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 446.2430766382451, "payoff": 103.7569233617549, "reach": 0.0, "continuation": 103.28021226705161, "value": 103.7569233617549, "action": "exercise"}, {"stock": 463.06586363981006, "payoff": 86.93413636018994, "reach": 0.0, "continuation": 86.45742526548665, "value": 86.93413636018994, "action": "exercise"}, {"stock": 480.5228479596439, "payoff": 69.47715204035609, "reach": 0.0, "continuation": 69.00044094565283, "value": 69.47715204035609, "action": "exercise"}, {"stock": 498.63793801663473, "payoff": 51.362061983365265, "reach": 0.0, "continuation": 50.88535088866199, "value": 51.362061983365265, "action": "exercise"}, {"stock": 517.4359435461495, "payoff": 32.564056453850526, "reach": 0.0, "continuation": 32.0873453591473, "value": 32.564056453850526, "action": "exercise"}, {"stock": 536.9426095784995, "payoff": 13.057390421500486, "reach": 0.10638227024748316, "continuation": 12.58067932679719, "value": 13.057390421500486, "action": "exercise"}, {"stock": 557.1846516983512, "payoff": 0, "reach": 0.21984534388072513, "continuation": 1.456725126872099, "value": 1.456725126872099, "action": "continue"}, {"stock": 578.1897926333695, "payoff": 0, "reach": 0.17845682462065657, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 599.9868002222074, "payoff": 0, "reach": 0.09649896055673993, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 622.6055268138384, "payoff": 0, "reach": 0.03468189416603661, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 646.0769501521935, "payoff": 0, "reach": 0.007478839830011949, "continuation": 0.0, "value": 0, "action": "continue"}, {"stock": 670.4332158020964, "payoff": 0, "reach": 0.000733065827782679, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 438.0622741219403, "payoff": 111.93772587805972, "reach": 0.0, "continuation": null, "value": 111.93772587805972, "action": "maturity"}, {"stock": 454.57665544633386, "payoff": 95.42334455366614, "reach": 0.0, "continuation": null, "value": 95.42334455366614, "action": "maturity"}, {"stock": 471.71360759373226, "payoff": 78.28639240626774, "reach": 0.0, "continuation": null, "value": 78.28639240626774, "action": "maturity"}, {"stock": 489.49660067918524, "payoff": 60.503399320814765, "reach": 0.0, "continuation": null, "value": 60.503399320814765, "action": "maturity"}, {"stock": 507.949989610733, "payoff": 42.050010389267015, "reach": 0.0, "continuation": null, "value": 42.050010389267015, "action": "maturity"}, {"stock": 527.0990474449585, "payoff": 22.9009525550415, "reach": 0.0, "continuation": null, "value": 22.9009525550415, "action": "maturity"}, {"stock": 546.97, "payoff": 3.0299999999999727, "reach": 0.10578615735912066, "continuation": null, "value": 3.0299999999999727, "action": "maturity"}, {"stock": 567.5900617734299, "payoff": 0, "reach": 0.19992983266716025, "continuation": null, "value": 0, "action": "expire"}, {"stock": 588.9874732141906, "payoff": 0, "reach": 0.13901997619057688, "continuation": null, "value": 0, "action": "expire"}, {"stock": 611.1915393996359, "payoff": 0, "reach": 0.06675355045501846, "continuation": null, "value": 0, "action": "expire"}, {"stock": 634.2326701706437, "payoff": 0, "reach": 0.021592207862738393, "continuation": null, "value": 0, "action": "expire"}, {"stock": 658.1424217797738, "payoff": 0, "reach": 0.004232878384969691, "continuation": null, "value": 0, "action": "expire"}, {"stock": 682.9535401095062, "payoff": 0, "reach": 0.000380325962368538, "continuation": null, "value": 0, "action": "expire"}]], "distribution": [{"step": 0, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 1, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 2, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 3, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 4, "reach": 1.0, "early": 0.05361005823127873, "maturity": 0.0, "expired": 0.0, "remaining": 0.9463899417687212, "pv": 2.24649801379847}, {"step": 5, "reach": 0.9463899417687213, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 0.9463899417687213, "pv": 0.0}, {"step": 6, "reach": 0.9463899417687212, "early": 0.05353414091533769, "maturity": 0.0, "expired": 0.0, "remaining": 0.8928558008533836, "pv": 2.2394296504312883}, {"step": 7, "reach": 0.8928558008533837, "early": 0.09721020967072196, "maturity": 0.0, "expired": 0.0, "remaining": 0.7956455911826615, "pv": 3.1464024445068035}, {"step": 8, "reach": 0.7956455911826616, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 0.7956455911826616, "pv": 0.0}, {"step": 9, "reach": 0.7956455911826615, "early": 0.058936905411087315, "maturity": 0.0, "expired": 0.0, "remaining": 0.7367086857715742, "pv": 1.9043051676330465}, {"step": 10, "reach": 0.7367086857715741, "early": 0.0926314866421382, "maturity": 0.0, "expired": 0.0, "remaining": 0.644077199129436, "pv": 2.1030340894731685}, {"step": 11, "reach": 0.644077199129436, "early": 0.10638227024748316, "maturity": 0.0, "expired": 0.0, "remaining": 0.5376949288819528, "pv": 1.375888334768031}, {"step": 12, "reach": 0.5376949288819529, "early": 0.0, "maturity": 0.10578615735912066, "expired": 0.43190877152283225, "remaining": 0.0, "pv": 0.3172140596804914}], "checks": {"early": 0.46230507111804703, "maturity": 0.10578615735912066, "expired": 0.43190877152283225, "forward_price": 13.3327717602913, "path_count": 4096}}, "hand": {"spot": 100, "strike": 100, "steps": 3, "up": 1.25, "down": 0.8, "gross": 1.025, "p": 0.4999999999999998, "price": 13.209326620333439, "layers": [[{"stock": 100.0, "payoff": 0.0, "reach": 1.0, "continuation": 13.209326620333439, "value": 13.209326620333439, "action": "continue"}], [{"stock": 80.0, "payoff": 20.0, "reach": 0.5000000000000002, "continuation": 22.32004759071982, "value": 22.32004759071982, "action": "continue"}, {"stock": 125.0, "payoff": 0, "reach": 0.4999999999999998, "continuation": 4.759071980963717, "value": 4.759071980963717, "action": "continue"}], [{"stock": 64.0, "payoff": 36.0, "reach": 0.2500000000000002, "continuation": 33.560975609756106, "value": 36.0, "action": "exercise"}, {"stock": 100.0, "payoff": 0.0, "reach": 0.5, "continuation": 9.756097560975615, "value": 9.756097560975615, "action": "continue"}, {"stock": 156.25, "payoff": 0, "reach": 0.24999999999999978, "continuation": 0.0, "value": 0, "action": "continue"}], [{"stock": 51.2, "payoff": 48.8, "reach": 0.0, "continuation": null, "value": 48.8, "action": "maturity"}, {"stock": 80.0, "payoff": 20.0, "reach": 0.2500000000000001, "continuation": null, "value": 20.0, "action": "maturity"}, {"stock": 125.0, "payoff": 0, "reach": 0.37499999999999983, "continuation": null, "value": 0, "action": "expire"}, {"stock": 195.3125, "payoff": 0, "reach": 0.12499999999999983, "continuation": null, "value": 0, "action": "expire"}]], "distribution": [{"step": 0, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 1, "reach": 1.0, "early": 0.0, "maturity": 0.0, "expired": 0.0, "remaining": 1.0, "pv": 0.0}, {"step": 2, "reach": 1.0, "early": 0.2500000000000002, "maturity": 0.0, "expired": 0.0, "remaining": 0.7499999999999998, "pv": 8.566329565734689}, {"step": 3, "reach": 0.7499999999999998, "early": 0.0, "maturity": 0.2500000000000001, "expired": 0.49999999999999967, "remaining": 0.0, "pv": 4.642997054598746}], "checks": {"early": 0.2500000000000002, "maturity": 0.2500000000000001, "expired": 0.49999999999999967, "forward_price": 13.209326620333435, "path_count": 8}}}}</script>
+<script>
+  const data = JSON.parse(document.getElementById('demo-data').textContent);
+  const el = id => document.getElementById(id);
+  const usd = x => '$' + x.toFixed(2);
+  const pct = x => (100 * x).toFixed(2) + '%';
+  const labels = { continue:'继续持有', exercise:'提前行权', maturity:'到期行权', expire:'到期无价值' };
+  const state = { key:'brkb', step:0, ups:0 };
+  let nodeButtons = [], barButtons = [], geometry;
+  const model = () => data.models[state.key];
+
+  function selectStep(step, ups) {
+    state.step = step;
+    const layer = model().layers[step];
+    state.ups = ups ?? layer.reduce((best, node, index) => node.reach > layer[best].reach ? index : best, 0);
+    renderSelection();
+    keepStepInView();
+  }
+
+  function renderChart() {
+    const chart = el('distribution');
+    chart.replaceChildren();
+    const rows = model().distribution;
+    const max = Math.max(...rows.map(row => row.early + row.maturity), 0.01);
+    barButtons = rows.map(row => {
+      const fraction = row.early + row.maturity;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'bar-cell' + (row.maturity ? ' maturity' : '');
+      button.setAttribute('aria-label', `第 ${row.step} 步，行权 ${pct(fraction)}`);
+      button.title = `第 ${row.step} 步 · 行权 ${pct(fraction)}`;
+      const track = document.createElement('span');
+      track.className = 'bar-track';
+      if (fraction > 0) {
+        const bar = document.createElement('span');
+        bar.className = 'bar';
+        bar.style.height = `${fraction / max * 76}%`;
+        const value = document.createElement('span');
+        value.className = 'bar-value';
+        value.textContent = pct(fraction);
+        bar.append(value);
+        track.append(bar);
+      }
+      const index = document.createElement('span');
+      index.className = 'bar-step';
+      index.textContent = row.step;
+      button.append(track, index);
+      button.addEventListener('click', () => selectStep(row.step));
+      chart.append(button);
+      return button;
+    });
+  }
+
+  function renderTree() {
+    const tree = el('nodes');
+    tree.replaceChildren();
+    const steps = model().steps;
+    const width = Math.max(el('tree-scroll').clientWidth - 2, 64 * steps + 64);
+    const spacing = steps === 3 ? 64 : 32;
+    const height = steps * spacing + 68;
+    const point = (step, ups) => [32 + (width - 64) * step / steps, (height + 25) / 2 + (step / 2 - ups) * spacing];
+    geometry = { width, height, point };
+    el('graph').style.width = `${width}px`;
+    el('graph').style.height = `${height}px`;
+    nodeButtons = model().layers.map((layer, step) => {
+      const column = document.createElement('span');
+      column.className = 'tree-step';
+      column.textContent = `第 ${step} 步`;
+      column.style.left = `${point(step, 0)[0]}px`;
+      tree.append(column);
+      return layer.map((node, ups) => {
+        const [x, y] = point(step, ups);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `tree-node ${node.action}`;
+        button.textContent = node.stock.toFixed(1);
+        button.setAttribute('aria-label', `第 ${step} 步，上涨 ${ups} 次，股价 ${node.stock.toFixed(2)}，${labels[node.action]}`);
+        button.title = button.getAttribute('aria-label');
+        button.style.left = `${x}px`;
+        button.style.top = `${y}px`;
+        button.addEventListener('click', () => selectStep(step, ups));
+        tree.append(button);
+        return button;
+      });
+    });
+  }
+
+  function drawEdges() {
+    const {width, height, point} = geometry;
+    const canvas = el('edges');
+    const scale = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const context = canvas.getContext('2d');
+    context.scale(scale, scale);
+    const {layers, steps, p} = model();
+    for (let step = 0; step < steps; step++) {
+      layers[step].forEach((node, ups) => {
+        for (const branch of [0, 1]) {
+          const flow = node.action === 'continue' ? node.reach * (branch ? p : 1 - p) : 0;
+          const visibleFlow = flow > 0 && step < state.step;
+          context.strokeStyle = visibleFlow ? '#208671' : '#d5dfda';
+          context.lineWidth = visibleFlow ? 1.3 + Math.sqrt(flow) * 6 : 1;
+          context.beginPath();
+          context.moveTo(...point(step, ups));
+          context.lineTo(...point(step + 1, ups + branch));
+          context.stroke();
+        }
+      });
+    }
+  }
+
+  function setValues(id, entries) {
+    const list = el(id);
+    list.replaceChildren();
+    for (const [name, value] of entries) {
+      const row = document.createElement('div');
+      const term = document.createElement('dt');
+      const definition = document.createElement('dd');
+      term.textContent = name;
+      definition.textContent = value;
+      row.append(term, definition);
+      list.append(row);
+    }
+  }
+
+  function renderSelection() {
+    const {step, ups} = state;
+    el('step').value = step;
+    el('step-label').value = `${step} / ${model().steps}`;
+    el('prev').disabled = step === 0;
+    el('next').disabled = step === model().steps;
+    barButtons.forEach((button, index) => button.setAttribute('aria-pressed', index === step));
+    nodeButtons.forEach((layer, i) => layer.forEach((button, j) => {
+      button.setAttribute('aria-pressed', i === step && j === ups);
+      button.classList.toggle('dimmed', i > step || model().layers[i][j].reach === 0);
+    }));
+    drawEdges();
+    const node = model().layers[step][ups];
+    const agg = model().distribution[step];
+    el('node-title').textContent = `第 ${step} 步 · 上涨 ${ups} 次`;
+    setValues('node-values', [['节点股价', usd(node.stock)], ['立即行权收益', usd(node.payoff)],
+      ['继续持有价值', node.continuation === null ? '—' : usd(node.continuation)],
+      ['节点价值', usd(node.value)], ['最优动作', labels[node.action]], ['节点到达概率', pct(node.reach)]]);
+    el('unreachable').hidden = node.reach > 0;
+    setValues('step-values', [['本步到达', pct(agg.reach)], ['本步行权', pct(agg.early + agg.maturity)],
+      ['本步无价值到期', pct(agg.expired)], ['传往下一步', pct(agg.remaining)]]);
+  }
+
+  function keepStepInView() {
+    const viewport = el('tree-scroll');
+    const left = geometry.point(state.step, state.ups)[0];
+    if (left < viewport.scrollLeft + 25 || left > viewport.scrollLeft + viewport.clientWidth - 25) {
+      viewport.scrollLeft = left - viewport.clientWidth / 2;
+    }
+  }
+
+  function renderScenario() {
+    const current = model();
+    el('price').textContent = usd(current.price);
+    for (const key of ['early', 'maturity', 'expired']) el(key).textContent = pct(current.checks[key]);
+    el('step').max = current.steps;
+    el('parameters').textContent = `标的 ${usd(current.spot)} · 行权价 ${usd(current.strike)} · 上涨概率 ${pct(current.p)}`;
+    el('data-note').textContent = state.key === 'brkb'
+      ? `${data.valuation_date} BRK.B 收盘价。${data.window_start} 至估值日的 60 个日收益估计年化波动率 ${pct(data.volatility)}。示例合约剩余 ${data.term_days} 天，利率 ${pct(data.rate)}，假设无股息。`
+      : '手算例每步上涨乘 1.25，下跌乘 0.80，无风险增长倍数为 1.025。';
+    el('checks').textContent = `核验通过。${current.checks.path_count.toLocaleString()} 条路径穷举与逐步概率一致，概率合计 100%，折现行权收益合计 ${usd(current.checks.forward_price)}。`;
+    el('tree-scroll').scrollLeft = 0;
+    renderChart();
+    renderTree();
+    renderSelection();
+  }
+
+  el('scenario').addEventListener('change', event => {
+    state.key = event.target.value;
+    state.step = 0;
+    state.ups = 0;
+    renderScenario();
+  });
+  el('step').addEventListener('input', event => selectStep(Number(event.target.value)));
+  el('prev').addEventListener('click', () => selectStep(state.step - 1));
+  el('next').addEventListener('click', () => selectStep(state.step + 1));
+  window.addEventListener('resize', () => { renderTree(); renderSelection(); keepStepInView(); });
+  for (const [name, link] of [['美国财政部利率表', data.sources.treasury], ['CRR 原文', data.sources.crr]]) {
+    const anchor = document.createElement('a');
+    anchor.href = link;
+    anchor.textContent = name;
+    el('sources').append(' ', anchor);
+  }
+  renderScenario();
+</script>
+</body>
+</html>
